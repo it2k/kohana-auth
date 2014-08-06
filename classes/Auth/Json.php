@@ -1,3 +1,3 @@
 <?php defined('SYSPATH') OR die('No direct script access.');
 
-class Controller_Auth extends Kohana_Controller_Auth {}
+class Auth_Json extends Kohana_Auth_Json {}

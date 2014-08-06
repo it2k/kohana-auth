@@ -68,6 +68,14 @@
 	<div class="container">
 		<div class="row">
 			<div class="my-page-header">
+<?php if ($message): ?>
+				<div class="col-md-6 col-md-offset-3">
+					<div class="alert alert-<?php echo $message_type ?> alert-dismissible" role="alert">
+						<button type="button" class="close" data-dismiss="alert"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+						<?php echo $message; ?>
+					</div>
+				</div>
+<?php endif; ?>
 				<?php echo $content ?>
 			</div>
 		</div>
