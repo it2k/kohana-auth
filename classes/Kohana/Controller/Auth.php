@@ -84,7 +84,7 @@ class Kohana_Controller_Auth {
 			throw new HTTP_Exception_404();
 		
 		$username = Arr::get($_POST, 'username');
-		$email    = Arr::get($_POST, 'email');
+		$email    = trim(strtolower(Arr::get($_POST, 'email')));
 		$password = Arr::get($_POST, 'password');
 		$password_confirm = Arr::get($_POST, 'password_confirm');
 		
@@ -99,11 +99,11 @@ class Kohana_Controller_Auth {
 			{
 				$email_confirm = (!isset($this->config['email_confirm']) OR !$this->config['email_confirm']) ? FALSE : TRUE;
 
-				if ($errors = Auth::instance()->registration(array('username' => $username, 'email' => $email, 'password' => $password), $email_confirm))
+				if ($errors = Auth::instance()->registration($username, $email, $password))
 				{
 					if (is_array($errors))
 					{
-						$this->template->message = implode(',', $errors);
+						$this->template->message = "<ul><li>".implode('</li><li>', $errors)."</li></ul>";
 					}
 					elseif (is_string($errors))
 						$this->template->message = $errors;

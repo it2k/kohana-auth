@@ -5,8 +5,6 @@ class Kohana_Auth_Json extends Auth {
 	// User list
 	protected $_users;
 
-	protected $users_database_path = NULL;
-
 	/**
 	 * Constructor loads the user list into the class.
 	 */
@@ -14,23 +12,8 @@ class Kohana_Auth_Json extends Auth {
 	{
 		parent::__construct($config);
 		
-		$this->users_database_path = APPPATH.'data'.DIRECTORY_SEPARATOR.'Auth'.DIRECTORY_SEPARATOR.'Users'.DIRECTORY_SEPARATOR;
-		
-		if (isset($config['users_database_path']))
-			$this->users_database_path = $config['users_database_path'];
-			
-		if (!file_exists($this->users_database_path) AND !is_writable($this->users_database_path) AND !$this->init_database($this->users_database_path))
-			throw new HTTP_Exception_500('Directory :dir not writable!', array(':dir' => $this->users_database_path));
-		
-		$this->_users = Arr::get($config, 'users', array());
-	}
-
-	protected function init_database($path)
-	{
-		if (@mkdir($this->users_database_path, 0750, TRUE) AND chmod($this->users_database_path, 0750))
-			return TRUE;
-			
-		return FALSE;
+		$this->init_datapath($this->DATAPATH.'Users/');
+		$this->init_datapath($this->DATAPATH.'Users/Emails/');
 	}
 
 	/**
@@ -100,22 +83,28 @@ class Kohana_Auth_Json extends Auth {
 		return ($password === $this->password($username));
 	}
 	
-	public function registration($data, $email_confirm)
+	public function _registration($username, $email, $password, $active = false)
 	{	
-		$valid = Validation::factory($data);
-		$valid->rule(TRUE, 'not_empty')
-			  ->rule('email', 'email')
-			  ->rule('username', 'alpha_numeric')
-			  ->rule('username', 'min_length', array(':value', '5'))
-			  ->rule('username', 'max_length', array(':value', '10'))
-			  ->rule('password', 'min_length', array(':value', '6'));
-			  
-		if (!$valid->check())
-			return $valid->errors();
+		if (file_exists($this->DATAPATH.'Users/'.strtolower($username)))
+			return 'Имя пользователя уже занято!';
+		elseif (file_exists($this->DATAPATH.'Users/Emails/'.$email))
+			return 'Емайл адрес уже используется!';
 		
-		if (file_exists($this->users_database_path.strtolower($data['username'])))
-			return 'Это имя пользователя уже занято!';
+		$data = array(
+			'username' => $username,
+			'email'    => $email,
+			'password' => $this->hash($password),
+			'active'   => $active,
+		);
 		
+		if (file_put_contents($this->DATAPATH.'Users/'.strtolower($username), json_encode($data)) AND file_put_contents($this->DATAPATH.'Users/Emails/'.$email, strtolower($username)))
+			return false;
+			
+		return true;
+	}
+	
+	public function _activation($username)
+	{
 		return true;
 	}
 
