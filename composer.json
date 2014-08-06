@@ -1,0 +1,15 @@
+{
+    "name": "zyuskin_en/kohana-auth",
+    "description": "Расширенный модуль авторизации для kohanaframework",
+    "type": "kohana-module",
+    "require": {
+        "kohana/auth": "3.3.*"
+    },
+    "license": "GPL2",
+    "authors": [
+        {
+            "name": "Егор Зюскин",
+            "email": "zyuskin_en@me.com"
+        }
+    ]
+}
