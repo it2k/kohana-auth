@@ -11,9 +11,9 @@ class Kohana_Auth_Json extends Auth {
 	public function __construct($config = array())
 	{
 		parent::__construct($config);
-
-		// Load user list
-		$this->_users = Arr::get($config, 'users', array());
+		
+		$this->init_datapath($this->DATAPATH.'Users/');
+		$this->init_datapath($this->DATAPATH.'Users/Emails/');
 	}
 
 	/**
@@ -81,6 +81,47 @@ class Kohana_Auth_Json extends Auth {
 		}
 
 		return ($password === $this->password($username));
+	}
+	
+	public function _registration($username, $email, $password)
+	{	
+		
+		$data = array(
+			'username' => $username,
+			'email'    => $email,
+			'password' => $this->hash($password),
+			'active'   => true,
+		);
+		
+		if (file_put_contents($this->DATAPATH.'Users/'.strtolower($username), json_encode($data)) AND file_put_contents($this->DATAPATH.'Users/Emails/'.$email, strtolower($username)))
+			return false;
+			
+		return true;
+	}
+	
+	public function _activation($email, $active = TRUE)
+	{
+		if (!file_exists($this->DATAPATH.'Users/Emails/'.$email))
+			return FALSE;
+			
+		$username = file_get_contents($this->DATAPATH.'Users/Emails/'.$email);
+		 
+		$data = json_decode(file_get_contents($this->DATAPATH.'Users/'.strtolower($username)));
+		$data->active = $active;
+		 
+		file_put_contents($this->DATAPATH.'Users/'.strtolower($username), json_encode($data));
+		
+		return true;
+	}
+
+	public function _unique_username($username)
+	{
+		return (file_exists($this->DATAPATH.'Users/'.$username)) ? FALSE : TRUE;
+	}	
+
+	public function _unique_email($email)
+	{
+		return (file_exists($this->DATAPATH.'Users/Emails/'.$email)) ? FALSE : TRUE;
 	}
 
 }
