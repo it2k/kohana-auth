@@ -6,6 +6,7 @@ abstract class Auth extends Kohana_Auth {
 	
 	abstract function _registration($username, $email, $password);
 	abstract function _activation($email);
+	abstract protected function _change_password($password, $email = NULL);
 	abstract function _unique_username($username);
 	abstract function _unique_email($email);
 	
@@ -98,7 +99,7 @@ abstract class Auth extends Kohana_Auth {
 
 		if ($code)
 		{
-			if (file_get_contents($this->DATAPATH.'ResetPassword/'.$email) == $code)
+			if (file_exists($this->DATAPATH.'ResetPassword/'.$email) AND file_get_contents($this->DATAPATH.'ResetPassword/'.$email) == $code)
 				return TRUE;
 			else
 				return FALSE;
@@ -111,9 +112,32 @@ abstract class Auth extends Kohana_Auth {
 		}
 	}
 	
-	public function reset_password()
+	public function change_password($password, $password_confirm, $email = NULL)
 	{
+		$valid = Validation::factory(array(
+			'password'         => $password,
+			'password_confirm' => $password_confirm,
+		));
 		
+		$valid->rule(TRUE, 'not_empty')
+			  ->rule('password', 'min_length', array(':value', '6'))
+			  ->rule('password_confirm',  'matches', array(':validation', 'password_confirm', 'password'));
+			  
+		if (!$valid->check())
+		{
+			return $valid->errors('validation');
+		}
+		
+		if ($this->_change_password($password, $email))
+		{
+			if ($email AND file_exists($this->DATAPATH.'ResetPassword/'.$email))
+				unlink($this->DATAPATH.'ResetPassword/'.$email);
+			
+			return TRUE;
+		}
+		
+		return FALSE;
+				
 	}
 	
 	protected function init_datapath($path)

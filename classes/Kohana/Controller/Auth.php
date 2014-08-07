@@ -156,12 +156,7 @@ class Kohana_Controller_Auth {
 		
 		return array('email' => $email, 'code' => $code);
 	}
-	
-	protected function action_password_reset()
-	{
 		
-	}
-	
 	protected function action_lost_password()
 	{
 		if (!$this->template->allow_reset_password)
@@ -180,14 +175,19 @@ class Kohana_Controller_Auth {
 					$this->template->message = 'Не верный код подтверждения.';
 					$this->template->message_type = 'danger';
 				}
+				else
+				{
+					HTTP::redirect(URL::base().'auth/change_password?email='.$email.'&code='.$code);
+				}
 			}
 			else
 			{
 				if (!Auth::instance()->lost_password($email))
 				{
-					$email = "";
 					$this->template->message = 'Пользователь с адресом '.$email.' не зарегистрирован.';
 					$this->template->message_type = 'danger';
+
+					$email = "";
 				}					
 			}
 		}
@@ -197,6 +197,62 @@ class Kohana_Controller_Auth {
 		
 		return array('email' => $email, 'code' => $code);
 	}
+	
+	protected function action_change_password()
+	{
+		$auth = Auth::instance();
+		
+		$email = $this->request->query('email');
+		$code  = $this->request->query('code');
+		
+		if (!$auth->logged_in() AND ((!$email OR !$code) OR !$auth->lost_password($email, $code)))
+			throw new HTTP_Exception_403();
+		
+		$current_password = $this->request->post('current_password');
+		$password = $this->request->post('password');
+		$password_confirm = $this->request->post('password_confirm');
+		
+		if ($auth->logged_in() AND $current_password AND $password AND $password_confirm)
+		{
+			if ($auth->password($auth->get_user()) == $auth->hash($current_password))
+			{
+				$result = $auth->change_password($password, $password_confirm);
+				if (!is_array($result) && $result)
+				{
+					HTTP::redirect(URL::base().'auth/logout');	
+				}
+				else
+				{
+					$this->template->message = (is_array($result)) ? "<ul><li>".implode('</li><li>', $result)."</li></ul>" : "Ошиба при изменении пароля.";
+					$this->template->message_type = 'danger';
+				}
+			}
+			else
+			{
+				$this->template->message = "Не верно введен текущий пароль";
+				$this->template->message_type = 'danger';
+			}
+		}
+		elseif (!$auth->logged_in() AND $password AND $password_confirm)
+		{
+			$result = $auth->change_password($password, $password_confirm, $email);
+			
+			if (!is_array($result) && $result)
+			{
+				HTTP::redirect(URL::base().'auth/');	
+			}
+			else
+			{
+				$this->template->message = (is_array($result)) ? "<ul><li>".implode('</li><li>', $result)."</li></ul>" : "Ошиба при изменении пароля.";
+				$this->template->message_type = 'danger';
+			}
+		}
+		
+		$this->template->title = 'Изменение пароля';
+		$this->view = 'Auth/change_password';		
+				
+	}
+
 	
 	protected function action_gen_password_hash()
 	{
