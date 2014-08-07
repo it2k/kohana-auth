@@ -66,7 +66,7 @@ class Kohana_Controller_Auth {
 		{
 			if (Auth::instance()->login($username, $password, $remember))
 			{
-				
+				HTTP::redirect(URL::base());	
 			}
 			else
 			{
@@ -76,6 +76,12 @@ class Kohana_Controller_Auth {
 		}
 		
 		$this->view = 'Auth/logon';	
+	}
+	
+	protected function action_logout()
+	{
+		Auth::instance()->logout();
+		HTTP::redirect(URL::base());
 	}
 	
 	protected function action_registration()

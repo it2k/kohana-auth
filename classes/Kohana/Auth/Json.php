@@ -2,9 +2,6 @@
 
 class Kohana_Auth_Json extends Auth {
 
-	// User list
-	protected $_users;
-
 	/**
 	 * Constructor loads the user list into the class.
 	 */
@@ -32,10 +29,15 @@ class Kohana_Auth_Json extends Auth {
 			$password = $this->hash($password);
 		}
 
-		if (isset($this->_users[$username]) AND $this->_users[$username] === $password)
+		if (file_exists($this->DATAPATH.'Users/'.$username))
 		{
-			// Complete the login
-			return $this->complete_login($username);
+			$data = json_decode(file_get_contents($this->DATAPATH.'Users/'.$username));
+			
+			if ($data->password == $password)
+			{
+				return $this->complete_login($username);	
+			}
+			
 		}
 
 		// Login failed
@@ -62,7 +64,12 @@ class Kohana_Auth_Json extends Auth {
 	 */
 	public function password($username)
 	{
-		return Arr::get($this->_users, $username, FALSE);
+		if (file_exists($this->DATAPATH.'Users/'.$username))
+		{
+			$data = json_decode(file_get_contents($this->DATAPATH.'Users/'.$username));
+			return $data->password;
+		}
+		return FALSE;
 	}
 
 	/**
