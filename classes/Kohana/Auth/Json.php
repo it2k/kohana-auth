@@ -83,18 +83,14 @@ class Kohana_Auth_Json extends Auth {
 		return ($password === $this->password($username));
 	}
 	
-	public function _registration($username, $email, $password, $active = false)
+	public function _registration($username, $email, $password)
 	{	
-		if (file_exists($this->DATAPATH.'Users/'.strtolower($username)))
-			return 'Имя пользователя уже занято!';
-		elseif (file_exists($this->DATAPATH.'Users/Emails/'.$email))
-			return 'Емайл адрес уже используется!';
 		
 		$data = array(
 			'username' => $username,
 			'email'    => $email,
 			'password' => $this->hash($password),
-			'active'   => $active,
+			'active'   => true,
 		);
 		
 		if (file_put_contents($this->DATAPATH.'Users/'.strtolower($username), json_encode($data)) AND file_put_contents($this->DATAPATH.'Users/Emails/'.$email, strtolower($username)))
@@ -103,9 +99,29 @@ class Kohana_Auth_Json extends Auth {
 		return true;
 	}
 	
-	public function _activation($username)
+	public function _activation($email, $active = TRUE)
 	{
+		if (!file_exists($this->DATAPATH.'Users/Emails/'.$email))
+			return FALSE;
+			
+		$username = file_get_contents($this->DATAPATH.'Users/Emails/'.$email);
+		 
+		$data = json_decode(file_get_contents($this->DATAPATH.'Users/'.strtolower($username)));
+		$data->active = $active;
+		 
+		file_put_contents($this->DATAPATH.'Users/'.strtolower($username), json_encode($data));
+		
 		return true;
+	}
+
+	public function _unique_username($username)
+	{
+		return (file_exists($this->DATAPATH.'Users/'.$username)) ? FALSE : TRUE;
+	}	
+
+	public function _unique_email($email)
+	{
+		return (file_exists($this->DATAPATH.'Users/Emails/'.$email)) ? FALSE : TRUE;
 	}
 
 }
