@@ -87,6 +87,30 @@ abstract class Auth extends Kohana_Auth {
 		return FALSE;
 	}
 	
+	public function lost_password($email, $code = '')
+	{
+
+		if (Auth::instance()->_unique_email($email))
+		{
+			// Not found
+			return FALSE;
+		}
+
+		if ($code)
+		{
+			if (file_get_contents($this->DATAPATH.'ResetPassword/'.$email) == $code)
+				return TRUE;
+			else
+				return FALSE;
+		}
+		else
+		{
+			$hash = $this->hash(time().$email);
+			file_put_contents($this->DATAPATH.'ResetPassword/'.$email, $hash);
+			return TRUE;
+		}
+	}
+	
 	public function reset_password()
 	{
 		

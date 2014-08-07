@@ -166,9 +166,36 @@ class Kohana_Controller_Auth {
 	{
 		if (!$this->template->allow_reset_password)
 			throw new HTTP_Exception_404();
-			
+		
+		$email = $this->request->query('email');
+		$code  = $this->request->query('code');
+		
+		if ($email)
+		{
+			if ($code)
+			{
+				if (!Auth::instance()->lost_password($email, $code))
+				{
+					$code = "";
+					$this->template->message = 'Не верный код подтверждения.';
+					$this->template->message_type = 'danger';
+				}
+			}
+			else
+			{
+				if (!Auth::instance()->lost_password($email))
+				{
+					$email = "";
+					$this->template->message = 'Пользователь с адресом '.$email.' не зарегистрирован.';
+					$this->template->message_type = 'danger';
+				}					
+			}
+		}
+		
 		$this->template->title = 'Восстановить пароль';
-		$this->view = 'Auth/lost_password';	
+		$this->view = 'Auth/lost_password';
+		
+		return array('email' => $email, 'code' => $code);
 	}
 	
 	protected function action_gen_password_hash()
