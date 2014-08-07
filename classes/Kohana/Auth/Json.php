@@ -121,6 +121,16 @@ class Kohana_Auth_Json extends Auth {
 		return true;
 	}
 
+	public function _change_password($password, $email = NULL)
+	{
+		$username = ($email) ? file_get_contents($this->DATAPATH.'Users/Emails/'.$email) : $this->get_user();
+		
+		$data = json_decode(file_get_contents($this->DATAPATH.'Users/'.strtolower($username)));
+		$data->password = $this->hash($password);
+		 
+		return file_put_contents($this->DATAPATH.'Users/'.strtolower($username), json_encode($data));		
+	}
+
 	public function _unique_username($username)
 	{
 		return (file_exists($this->DATAPATH.'Users/'.$username)) ? FALSE : TRUE;
