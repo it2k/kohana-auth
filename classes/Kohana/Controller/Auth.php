@@ -57,6 +57,10 @@ class Kohana_Controller_Auth {
 	
 	protected function action_index()
 	{
+		$user = new Model_User(1);
+		$user->username = 'zyuskin_en2';
+		$user->save();
+	
 		$username = Arr::get($_POST, 'username');
 		$password = Arr::get($_POST, 'password');
 		

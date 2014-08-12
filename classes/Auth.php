@@ -14,19 +14,29 @@ abstract class Auth extends Kohana_Auth {
 	{
 		parent::__construct($config);
 		
-		$this->DATAPATH = (isset($config['data_path'])) ? trim($config['data_path']) : APPPATH.'data'.DIRECTORY_SEPARATOR.'Auth'.DIRECTORY_SEPARATOR;
+		$this->DATAPATH = (isset($config['data_path'])) ? trim($config['data_path']) : APPPATH.'data'.DIRECTORY_SEPARATOR.'.auth'.DIRECTORY_SEPARATOR;
 		
 		if (!$this->init_datapath($this->DATAPATH))
 			throw new HTTP_Exception_500('Directory :dir not writable!', array(':dir' => $this->DATAPATH));
 		
-		$this->init_datapath($this->DATAPATH.'EmailConfirm/');
-		$this->init_datapath($this->DATAPATH.'ResetPassword/');
+		$this->init_datapath($this->DATAPATH.'email_confirm'.DIRECTORY_SEPARATOR);
+		$this->init_datapath($this->DATAPATH.'reset_password'.DIRECTORY_SEPARATOR);
 	}
 	
 	public function registration($username, $email, $password, $password_confirm)
 	{
-		$email_confirm = (!isset($this->_config['email_confirm']) OR !$this->_config['email_confirm']) ? TRUE : FALSE;
+		// Если разрешена регистрация и есть класс Model_User
+		if (!isset($this->_config['allow_registration']) OR !$this->_config['allow_registration'] OR !class_exists('Model_User'))
+			throw new HTTP_Exception_500('Registration not supported');
 		
+		$user = new Model_User;
+		
+		// Нужны два метода для регистрации create_user и unique_key_exists
+		if (!method_exists($user, 'create_user') OR !method_exists($user, 'unique_key_exists'))
+			throw new HTTP_Exception_500('Registration not supported');
+	
+		$email_confirm = (!isset($this->_config['email_confirm']) OR !$this->_config['email_confirm']) ? TRUE : FALSE;
+
 		$valid = Validation::factory(array(
 			'username'         => $username,
 			'email'            => $email,
@@ -34,19 +44,11 @@ abstract class Auth extends Kohana_Auth {
 			'password_confirm' => $password_confirm,
 		));
 		
-		$valid->rule(TRUE, 'not_empty')
-			  ->rule('email', 'email')
-			  ->rule('email', 'max_length', array(':value', '20'))
-			  ->rule('email', 'Auth::unique_email')
-			  
-			  ->rule('username', 'alpha_dash')
-			  ->rule('username', 'min_length', array(':value', '4'))
-			  ->rule('username', 'max_length', array(':value', '12'))
-			  ->rule('username', 'Auth::unique_username')
-			  
-			  ->rule('password', 'min_length', array(':value', '6'))
-			  ->rule('password_confirm',  'matches', array(':validation', 'password_confirm', 'password'));
-			  
+		foreach ($user->rules() as $field => $rules)
+			$valid->rules($field, $rules);
+			
+		$valid->rule('password_confirm',  'matches', array(':validation', 'password_confirm', 'password'));
+		
 		if (!$valid->check())
 		{
 			return $valid->errors('validation');
@@ -61,11 +63,15 @@ abstract class Auth extends Kohana_Auth {
 				'code' => $this->hash(time().$username),
 			);
 			
-			file_put_contents($this->DATAPATH.'EmailConfirm/'.$email, json_encode($data));
+			file_put_contents($this->DATAPATH.'email_confirm'.DIRECTORY_SEPARATOR.$email, json_encode($data));
 		}
 		else
 		{
-			$this->_registration($username, $email, $password);
+			$user->create_user(array(
+				'username'         => $username,
+				'email'            => $email,
+				'password'         => $password,
+			), NULL);
 		}
 		
 		// No errors
@@ -73,15 +79,26 @@ abstract class Auth extends Kohana_Auth {
 	}
 
 	public function registration_confirm($email, $code)
-	{	
-		if (file_exists($this->DATAPATH.'EmailConfirm/'.$email))
+	{
+		// Если разрешена регистрация и есть класс Model_User
+		if (!isset($this->_config['allow_registration']) OR !$this->_config['allow_registration'] OR !class_exists('Model_User'))
+			throw new HTTP_Exception_500('Registration not supported');
+		
+		$user = new Model_User;
+
+		if (file_exists($this->DATAPATH.'email_confirm'.DIRECTORY_SEPARATOR.$email))
 		{
-			$data = json_decode(file_get_contents($this->DATAPATH.'EmailConfirm/'.$email));
+			$data = json_decode(file_get_contents($this->DATAPATH.'email_confirm'.DIRECTORY_SEPARATOR.$email));
 			
 			if ($data->code == $code)
-				$this->_registration($data->username, $data->email, $data->password);
+				$user->create_user(array(
+					'username'         => $data->username,
+					'email'            => $data->email,
+					'password'         => $data->password,
+				), NULL);
+				//$this->_registration($data->username, $data->email, $data->password);
 
-			unlink($this->DATAPATH.'EmailConfirm/'.$email);			
+			unlink($this->DATAPATH.'email_confirm'.DIRECTORY_SEPARATOR.$email);			
 			return TRUE;
 		}
 		
