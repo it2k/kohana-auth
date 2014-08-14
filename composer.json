@@ -1,5 +1,5 @@
 {
-    "name": "zyuskin_en/kohana-auth",
+    "name": "it2k/kohana-auth",
     "description": "Расширенный модуль авторизации для kohanaframework",
     "type": "kohana-module",
     "require": {
