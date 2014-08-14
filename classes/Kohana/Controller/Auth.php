@@ -2,17 +2,27 @@
 
 class Kohana_Controller_Auth {
 
+	public $request;
+
+	public $response;
+
 	protected $template = 'Auth/template';
 
 	protected $view     = FALSE;
 
 	protected $data     = array();
 	
-	protected $config 	= array(); 
-
-	public $request;
-
-	public $response;
+	protected $config 	= array();
+	
+	protected $_db_path;
+	
+	protected $allow_registration = FALSE;
+	
+	protected $allow_reset_password = FALSE;
+	
+	protected $allow_remember = FALSE;
+	
+	protected $email_confirm = TRUE;
 
 	public function __construct(Request $request, Response $response)
 	{
@@ -23,13 +33,36 @@ class Kohana_Controller_Auth {
 	public function execute()
 	{
 
-		$this->config = Kohana::$config->load('auth');
+		$this->_db_path = APPPATH.DIRECTORY_SEPARATOR.'data'.DIRECTORY_SEPARATOR.'.auth'.DIRECTORY_SEPARATOR;
+		if (!$this->init_db($this->_db_path) OR !$this->init_db($this->_db_path.'email_confirm') OR !$this->init_db($this->_db_path.'reset_password'))
+			throw new HTTP_Exception_500('Cannot initialize auth database');
+
+		$this->config = Kohana::$config->load('auth');			
 
 		$action = 'action_'.$this->request->action();
 
 		if ( ! method_exists($this, $action))
 			throw new HTTP_Exception_404();
 
+		if (class_exists('Model_User'))
+		{
+			$user = new Model_User();
+			
+			if (method_exists($user, 'unique_key_exists'))
+			{
+			
+				$this->allow_reset_password = TRUE;
+				
+				$this->allow_remember = TRUE;
+	
+				if ((method_exists($user, 'create_user')) AND (isset($this->config['allow_registration'])) AND ($this->config['allow_registration']))
+						$this->allow_registration = TRUE;
+			}
+		}
+		
+		if (isset($this->config['email_confirm']) AND !$this->config['email_confirm'])
+			$this->email_confirm = FALSE;
+		
 		$this->template = View::factory($this->template);
 
 		$this->template->title = 'Авторизация';
@@ -37,13 +70,13 @@ class Kohana_Controller_Auth {
 		$this->template->message = '';
 		$this->template->message_type = 'success';
 
-		$this->template->allow_registration = ((isset($this->config['allow_registration']) AND ($this->config['allow_registration']) AND (in_array($this->config['driver'], array('ORM', 'Json')))) ? TRUE : FALSE);
-		$this->template->allow_reset_password = (in_array($this->config['driver'], array('ORM', 'Json'))) ? TRUE : FALSE;
-		$this->template->allow_remember = (in_array($this->config['driver'], array('ORM', 'Json'))) ? TRUE : FALSE;
+		$this->template->allow_registration = $this->allow_registration;
+		$this->template->allow_reset_password = $this->allow_reset_password;
+		$this->template->allow_remember = $this->allow_remember;
 		
-		$this->template->set_global('allow_registration', $this->template->allow_registration);
-		$this->template->set_global('allow_reset_password', $this->template->allow_reset_password);
-		$this->template->set_global('allow_remember', $this->template->allow_remember);
+		$this->template->set_global('allow_registration', $this->allow_registration);
+		$this->template->set_global('allow_reset_password', $this->allow_reset_password);
+		$this->template->set_global('allow_remember', $this->allow_remember);
 		
 		$this->data = $this->{$action}();
 
@@ -57,10 +90,6 @@ class Kohana_Controller_Auth {
 	
 	protected function action_index()
 	{
-		$user = new Model_User(1);
-		$user->username = 'zyuskin_en2';
-		$user->save();
-	
 		$username = Arr::get($_POST, 'username');
 		$password = Arr::get($_POST, 'password');
 		
@@ -90,40 +119,66 @@ class Kohana_Controller_Auth {
 	
 	protected function action_registration()
 	{
-		if (!$this->template->allow_registration)
+		if (!$this->allow_registration)
 			throw new HTTP_Exception_404();
 		
-		$username = trim(Arr::get($_POST, 'username'));
-		$email    = trim(strtolower(Arr::get($_POST, 'email')));
-		$password = Arr::get($_POST, 'password');
-		$password_confirm = Arr::get($_POST, 'password_confirm');
+		$username = trim(strtolower($this->request->post('username')));
+		$email    = trim(strtolower($this->request->post('email')));
+		$password = $this->request->post('password');
+		$password_confirm = $this->request->post('password_confirm');
 		
 		if ($username AND $email AND $password AND $password_confirm)
 		{
-			$email_confirm = (!isset($this->config['email_confirm']) OR !$this->config['email_confirm']) ? TRUE : FALSE;
 
-			if ($errors = Auth::instance()->registration($username, $email, $password, $password_confirm))
+			$user = new Model_User;
+
+			$valid = Validation::factory(array(
+				'username'         => $username,
+				'email'            => $email,
+				'password'         => $password,
+				'password_confirm' => $password_confirm,
+			));
+			
+			foreach ($user->rules() as $field => $rules)
+				$valid->rules($field, $rules);
+				
+			$valid->rule('password_confirm',  'matches', array(':validation', 'password_confirm', 'password'));
+			
+			if (!$valid->check())
 			{
-				if (is_array($errors))
-				{
-					$this->template->message = "<ul><li>".implode('</li><li>', $errors)."</li></ul>";
-				}
-				elseif (is_string($errors))
-					$this->template->message = $errors;
-				else
-					$this->template->message = 'При регистрации возникли ошибки';
-					
+				$this->template->message = "<ul><li>".implode('</li><li>', $valid->errors('validation'))."</li></ul>";
 				$this->template->message_type = 'danger';
 			}
 			else
 			{
-				if (!$email_confirm)
+				if (!$this->email_confirm)
 				{
+
+					$user->create_user(array(
+						'username'         => $username,
+						'email'            => $email,
+						'password'         => $password,
+						'password_confirm' => $password_confirm,
+						'enable'           => 1,
+					), array('username', 'email', 'password', 'enable'));
+
 					Auth::instance()->force_login(strtolower($username));
 					HTTP::redirect(URL::base());
 				}
 				else
 				{
+					$data = array(
+						'username' => $username,
+						'email' => $email,
+						'password' => $password,
+						'password_confirm' => $password,
+						'enable' => 1,
+						'code' => Auth::instance()->hash(time().$username),
+					);
+				
+					if (!file_put_contents($this->_db_path.'email_confirm'.DIRECTORY_SEPARATOR.$email, json_encode($data)))
+						throw new HTTP_Exception_500('Cannot save email_confirm file');
+				
 					HTTP::redirect(URL::base().'auth/registration_confirm?email='.$email);
 				}
 			}
@@ -135,20 +190,30 @@ class Kohana_Controller_Auth {
 	
 	protected function action_registration_confirm()
 	{
-		$email = strtolower($this->request->query('email'));
-		$code  = $this->request->query('code');
+		if (!$this->allow_registration)
+			throw new HTTP_Exception_404();
+			
+		$email = trim(strtolower($this->request->query('email')));
+		$code  = trim($this->request->query('code'));
 		
 		// TODO: Нужна проверка что это email
-		if (!$email)
-			throw new HTTP_Exception_500('Email not set');
+		if (!$email OR !Valid::email($email))
+			throw new HTTP_Exception_500('Не верный email адрес');
 
 		$this->template->message = '<strong>Регистрация прошла успешно</strong><p>На указанный Вами почтовый ящик('.$email.') выслан код подтверждения, для активации аккаунта введите код подтверждения в форму ниже, либо пройдите по ссылке из письма</p>';
 		$this->template->message_type = 'info';
 				
-		if ($code)
+		if ($code AND file_exists($this->_db_path.'email_confirm'.DIRECTORY_SEPARATOR.$email))
 		{
-			if (Auth::instance()->registration_confirm($email, $code))
+			$data = json_decode(file_get_contents($this->_db_path.'email_confirm'.DIRECTORY_SEPARATOR.$email), TRUE);
+
+			if ($data['code'] == $code)
+			{
+				$user = new Model_User();
+				$user->create_user($data, array('username', 'email', 'password', 'enable'));
+				unlink($this->_db_path.'email_confirm'.DIRECTORY_SEPARATOR.$email);
 				HTTP::redirect(URL::base().'auth/');
+			}
 				
 			$this->template->message = 'Не верный код подтверждения!';
 			$this->template->message_type = 'danger';
@@ -279,5 +344,14 @@ class Kohana_Controller_Auth {
 		$this->template->title = 'Генерация хеша пароля';
 		$this->view = 'Auth/gen_password_hash';
 	}
+
+	protected function init_db($path)
+	{
+		if (!file_exists($path) AND !is_writable($path) AND !@mkdir($path, 0750, TRUE) AND !chmod($path, 0750))
+			return FALSE;
+		
+		return TRUE;
+	}
+
 
 }
