@@ -228,17 +228,27 @@ class Kohana_Controller_Auth {
 		
 	protected function action_lost_password()
 	{
-		if (!$this->template->allow_reset_password)
+		if (!$this->allow_reset_password)
 			throw new HTTP_Exception_404();
 		
-		$email = $this->request->query('email');
-		$code  = $this->request->query('code');
+		$email = trim(strtolower($this->request->query('email')));
+		$code  = trim($this->request->query('code'));
+		
+		$user = new Model_User();
 		
 		if ($email)
 		{
-			if ($code)
+			if (!Valid::email($email))
 			{
-				if (!Auth::instance()->lost_password($email, $code))
+				$this->template->message = 'Не верный формат email адреса.';
+				$this->template->message_type = 'danger';
+
+				$email = "";
+				
+			}
+			elseif ($code)
+			{
+				if (!file_exists($this->_db_path.'reset_password/'.$email) OR @file_get_contents($this->_db_path.'reset_password/'.$email) != $code)
 				{
 					$code = "";
 					$this->template->message = 'Не верный код подтверждения.';
@@ -251,13 +261,18 @@ class Kohana_Controller_Auth {
 			}
 			else
 			{
-				if (!Auth::instance()->lost_password($email))
+				if ($user->unique_key_exists($email, 'email'))
 				{
 					$this->template->message = 'Пользователь с адресом '.$email.' не зарегистрирован.';
 					$this->template->message_type = 'danger';
 
 					$email = "";
-				}					
+				}
+				else
+				{
+					$hash = Auth::instance()->hash(time().$email);
+					file_put_contents($this->_db_path.'reset_password/'.$email, $hash);
+				}
 			}
 		}
 		
@@ -274,7 +289,7 @@ class Kohana_Controller_Auth {
 		$email = $this->request->query('email');
 		$code  = $this->request->query('code');
 		
-		if (!$auth->logged_in() AND ((!$email OR !$code) OR !$auth->lost_password($email, $code)))
+		if (!$auth->logged_in() AND ((!$email OR !$code) OR (!file_exists($this->_db_path.'reset_password/'.$email) OR @file_get_contents($this->_db_path.'reset_password/'.$email) != $code) ))
 			throw new HTTP_Exception_403();
 		
 		$current_password = $this->request->post('current_password');
